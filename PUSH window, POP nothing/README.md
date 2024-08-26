@@ -43,7 +43,7 @@ ATOM __fastcall InitWinMain(HINSTANCE a1)
 
 Hàm ``loadfunc`` có cấu trúc như dưới đây
 
-```c
+```C
 LRESULT __fastcall loadfunc(HWND a1, UINT a2, WPARAM a3, LPARAM a4)
 {
   struct _LIST_ENTRY *maybeAddVectorExecptionHandler; // [rsp+40h] [rbp-88h]
@@ -90,7 +90,7 @@ LRESULT __fastcall loadfunc(HWND a1, UINT a2, WPARAM a3, LPARAM a4)
 
 Nhưng vấn đề là sau khi Resolve API thì chương trình chạy đến hàm ``loadresourcesss``
 
-```c
+```C
 __int64 loadresourcesss()
 {
   DWORD TempPathW; // [rsp+50h] [rbp-4F8h]
@@ -139,7 +139,7 @@ Tại đây chương trình load một số byte từ phần resources ``BIN`` c
 
 Quay trở lại ``loadfunc``, chương trình sau khi bắt người dùng nhập flag sẽ chạy đến case ``g`` trong case ``0x111`` rồi chạy vào hàm ``checkLength``
 
-```c
+```C
 void __fastcall __noreturn checkLength(HWND a1)
 {
   HWND DlgItem; // rax
@@ -189,7 +189,7 @@ Nhìn lại hàm ``loadfunc``, sau khi phân tích kĩ thì có thể nhận th�
 
 Phân tích hàm ``Handle``, hàm này truyền tạo mảng gồm giá trị ``5`` và mã lỗi sau đó truyền mảng trên vào ``connectpipe``
 
-```
+```C
 __int64 __fastcall Handle(_EXCEPTION_POINTERS *a1)
 {
   _BYTE *v2; // [rsp+30h] [rbp-58h]
@@ -211,7 +211,7 @@ __int64 __fastcall Handle(_EXCEPTION_POINTERS *a1)
 
 Có thể thấy hàm ``connectpipe`` bị gọi khá nhiều lần với nhiều thể loại tham số truyền vào khác nhau, xem qua hàm này thì hàm dùng ``CreateFileW`` để tạo kết nối đến ``\\\\.\\pipe\\KMACTF``, sau đó đó dùng ``WriteFile`` để truyền data đến tiến trình khác thông qua pipe , rồi lại dùng ``ReadFile`` để đọc thông tin được nhận về từ tiến trình kia cũng thông qua pipe
 
-```
+```C
 BOOL __fastcall connectpipe(void *a1, DWORD a2)
 {
   DWORD NumberOfBytesWritten; // [rsp+40h] [rbp-18h] BYREF
