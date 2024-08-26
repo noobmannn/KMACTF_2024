@@ -524,3 +524,93 @@ Kết quả script C trên là chuỗi ``S01BQ1RGe2hvd19tYW55X3RpbWVzX2FyZV95b3V
 
 ``KMACTF{how_many_times_are_you_died_today?huh?}``
 
+# Note
+
+Script giải bằng Python
+
+```python
+import base64
+
+checker = [0x72, 0xBB, 0xB2, 0xCD, 0x58, 0xB2, 0x81, 0x0E, 0xA4, 0xB1, 
+  0xED, 0xDB, 0x84, 0xB2, 0xC0, 0xAA, 0x60, 0xD0, 0xE8, 0xE8, 
+  0xB0, 0x12, 0x81, 0x1E, 0xED, 0xD0, 0xF3, 0x05, 0xB0, 0xB1, 
+  0x04, 0x04, 0x7D, 0xF3, 0xC0, 0xE8, 0xED, 0x12, 0xF3, 0xC2, 
+  0x7D, 0x0E, 0x0E, 0x0E, 0x7D, 0x04, 0xC0, 0xBB, 0xED, 0xB1, 
+  0x81, 0xED, 0xA4, 0xCF, 0xC0, 0x68, 0x84, 0xD0, 0xE2, 0x1B, 
+  0xC2, 0x58, 0x30, 0x30, 0x00]
+
+is0xC000001D = ['+', '2', 'H', 'R', 'X', 'Z', 'a', 'l', 'm', 'o', 's', 'v', 'x']
+is0x80000003 = ['/', 'C', 'D', 'F', 'N', 'P', 'c', 'j', 'k', 'p', 'q', 't', 'w']
+is0xC0000005 = ['0', '6', '7', 'A', 'B', 'K', 'L', 'O', 'T', 'b', 'g', 'y', 'z']
+is0xc0000096 = ['1', '4', '5', '8', '=', 'I', 'J', 'U', 'W', 'd', 'f', 'r', 'u']
+is0xc0000094 = ['3', '9', 'E', 'G', 'M', 'Q', 'S', 'V', 'Y', 'e', 'h', 'i', 'n']
+
+errorcode = [0xC0000094, 0x0C0000005, 0x0C0000096, 0x0C0000005, 0x0C0000094, 0x0C0000096, 0x0C000001D, 0x0C0000094, 0x0C0000094,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x0C0000096, 0x0C0000096, 0x0C0000094, 0x80000003, 0x0C0000094, 0x0C0000096, 0x0C0000096, 0x0C0000096,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x80000003, 0x0C0000005, 0x0C0000096, 0x0C0000094, 0x0C0000005, 0x0C000001D, 0x0C000001D,
+0x80000003, 0x0C0000005, 0x0C000001D, 0x0C0000094, 0x0C0000094, 0x0C0000096, 0x0C0000005, 0x0C0000094, 0x0C0000094, 0x0C0000096,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x0C000001D, 0x0C000001D, 0x80000003, 0x0C0000094, 0x0C0000005, 0x0C0000005, 0x0C000001D, 0x0C000001D,
+0x0C0000094, 0x0C0000094, 0x0C0000005, 0x0C0000094, 0x0C000001D, 0x0C0000096, 0x0C0000096, 0x0C0000005, 0x80000003, 0x0C0000096,
+0x0C0000094, 0x0C0000096, 0x0C0000096]
+
+ciph = ''
+
+def case0x0C0000094(char):
+    v0 = char
+    for i in range(10):
+        char = ((i ^ v0) + ((93 * ((i + v0) ^ ((3 * v0 + i + char + 4 * i) & 0xFF))) & 0xFF)) & 0xFF 
+    return char
+
+def case0x0C0000096(char):
+    v0 = char
+    for n in range(10):
+        if char & 0x80:
+            char |= 0xFFFFFF00
+        char = (((77 * ((7 * n) ^ ((char + ((v0 << (n % 3))) + 45) & 0xFFFFFFFF))) + n + v0) % 255) & 0xFF
+    return char
+
+def case0xC000001D(char):
+    v0 = char
+    for k in range(10):
+        if char & 0x80:
+            char |= 0xFFFFFF00
+        char = ((char << (k % 3)) & 0xFFFFFFFF) & 0x4F ^ ((((91  * ((k + v0) ^ char)) & 0xFF) + k + (v0 >> (((k >> 31) ^ k & 1) - (k >> 31)))) & 0xFF)
+    return char
+
+def case0xC0000005(char):
+    v0 = char
+    for j in range(10):
+        char = ((char + j + 85) & 0xFF) ^ 7
+    return char
+
+def case0x80000003(char):
+    v0 = char
+    for i in range(10):
+        char = (((7 * (i ^ v0)) & 0xFF) + ((i + 51) ^ (char + 69))) & 0xFF
+    return char
+
+for i in range(64):
+    match errorcode[i]:
+        case 0x0C000001D:
+            for c in is0xC000001D:
+                if case0xC000001D(ord(c)) == checker[i]:
+                    ciph += c
+        case 0x80000003:
+            for c in is0x80000003:
+                if case0x80000003(ord(c)) == checker[i]:
+                    ciph += c
+        case 0x0C0000005:
+            for c in is0xC0000005:
+                if case0xC0000005(ord(c)) == checker[i]:
+                    ciph += c
+        case 0x0C0000094:
+            for c in is0xc0000094:
+                if case0x0C0000094(ord(c)) == checker[i]:
+                    ciph += c 
+        case 0x0C0000096:
+            for c in is0xc0000096:
+                if case0x0C0000096(ord(c)) == checker[i]:
+                    ciph += c
+
+print(base64.b64decode(ciph.encode()))
+```
