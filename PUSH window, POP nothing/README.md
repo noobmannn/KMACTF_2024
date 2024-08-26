@@ -206,3 +206,321 @@ __int64 __fastcall Handle(_EXCEPTION_POINTERS *a1)
   return 0xFFFFFFFFi64;
 }
 ```
+
+### Pipe
+
+Có thể thấy hàm ``connectpipe`` bị gọi khá nhiều lần với nhiều thể loại tham số truyền vào khác nhau, xem qua hàm này thì hàm dùng ``CreateFileW`` để tạo kết nối đến ``\\\\.\\pipe\\KMACTF``, sau đó đó dùng ``WriteFile`` để truyền data đến tiến trình khác thông qua pipe , rồi lại dùng ``ReadFile`` để đọc thông tin được nhận về từ tiến trình kia cũng thông qua pipe
+
+```
+BOOL __fastcall connectpipe(void *a1, DWORD a2)
+{
+  DWORD NumberOfBytesWritten; // [rsp+40h] [rbp-18h] BYREF
+  DWORD NumberOfBytesRead; // [rsp+44h] [rbp-14h] BYREF
+
+  while ( 1 )
+  {
+    hObject = CreateFileW(L"\\\\.\\pipe\\KMACTF", 0xC0000000, 0, 0i64, 3u, 0, 0i64);
+    if ( hObject != (HANDLE)-1i64 )
+      break;
+    Sleep(0x64u);
+  }
+  WriteFile(hObject, a1, a2, &NumberOfBytesWritten, 0i64);
+  ReadFile(hObject, a1, a2, &NumberOfBytesRead, 0i64);
+  return CloseHandle(hObject);
+}
+```
+
+Quay lại hàm ``loadresource``, hàm này tạo một file có tên ``Windows Update Checker 2.exe`` trong thư mục ``Temp`` sau đó chạy tiến trình bằng file trên. Bây giờ mình sẽ vào thư mục ``Temp`` để mở file ``Windows Update Checker 2.exe`` bằng IDA
+
+Ở file này, chương trình gọi ``WinMain`` -> ``sub_7FF63B351560`` như dưới đây
+
+![image](https://github.com/user-attachments/assets/8f014da9-39d3-4fc4-8284-ffbac91fd01f)
+
+Chương trình gọi ``CreateNamedPipe`` để tạo pipe ``\\\\.\\pipe\\KMACTF`` sau đó gọi ``ConnectNamedPipe`` để kết nối đến pipe đó. Hàm ``ReadFile`` được gọi để nhận data truyền đến từ tiến trình bên kia, như đã phân tích ở các hàm trên, data truyền về sẽ luôn có dạng ``numer + data``, với number được truyền vào trong switch-case
+
+#### Case 0x55
+
+Case này được gọi tới khi người dùng nhập flag không đủ dài
+
+```C
+case 0x55:
+          anhTaiTrollerdotExe();
+          ExitProcess(0);
+```
+
+Vào hàm ``anhTaiTrollerdotExe`` ->``sub_7FF63B351330``, hàm này cũng load resource và ghi vào file ``Windows Update Checker.exe`` trong thư mục ``Temp`` rồi dùng ``CreateProcessW`` để chạy tiến trình trên, sau khi thủ dump file ra và phân tích thì có vẻ đây chính là thử gây ra hiện tượng ảnh anh Tài chạy lung tung trên màn hình :))))
+
+#### Case 0x1
+
+```C
+case 1:
+          memset(flag, 0, sizeof(flag));
+          v10 = -1i64;
+          do
+            ++v10;
+          while ( *((_BYTE *)lpBuffer + v10 + 1) );
+          qmemcpy(flag, (char *)lpBuffer + 1, v10);
+          memset((void *)flag_base64, 0, 0x100ui64);
+          v11 = -1i64;
+          do
+            ++v11;
+          while ( flag[v11] );
+          flag_base64 = (__int64)base64encode((__int64)flag, v11);
+          v12 = -1i64;
+          do
+            ++v12;
+          while ( *(_BYTE *)(flag_base64 + v12) );
+          len_base64 = v12;
+          WriteFile(hNamedPipe, lpBuffer, 0x600u, &NumberOfBytesWritten, 0i64);
+          break;
+```
+
+Case này xử lý input người dùng nhập vào, bằng cách mã hoá thành một chuỗi base64 và lưu vào biến ``flag_base64``, data được gửi đi cho chương trình khác là kí tự đầu tiên của chuỗi Base64 bị mã hoá
+
+#### Case 0x5
+
+```C
+case 5:
+          v3 = *(_DWORD *)((char *)lpBuffer + 1);
+          if ( errorcode[idx] != v3 )
+            check = 0;
+          cur_chr = *(_BYTE *)(flag_base64 + idx);
+          switch ( v3 )
+          {
+            case 0x80000003:
+              errorcode_cpy[idx] = 0x80000003;
+              for ( i = 0; i < 10; ++i )
+                *(_BYTE *)(flag_base64 + idx) = 7 * (i ^ cur_chr) + ((i + 51) ^ (*(_BYTE *)(flag_base64 + idx) + 69));
+              ++idx;
+              ++*(_QWORD *)((char *)lpBuffer + 401);
+              break;
+            case 0xC0000005:
+              errorcode_cpy[idx] = 0xC0000005;
+              for ( j = 0; j < 10; ++j )
+                *(_BYTE *)(flag_base64 + idx) = (*(_BYTE *)(flag_base64 + idx) + j + 85) ^ 7;
+              ++idx;
+              *(_QWORD *)((char *)lpBuffer + 401) += 7i64;
+              break;
+            case 0xC000001D:
+              errorcode_cpy[idx] = 0xC000001D;
+              for ( k = 0; k < 10; ++k )
+                *(_BYTE *)(flag_base64 + idx) = (*(char *)(flag_base64 + idx) << (k % 3)) & 0x4F ^ (91 * ((k + cur_chr) ^ *(_BYTE *)(flag_base64 + idx))
+                                                                                                  + k
+                                                                                                  + (cur_chr >> (((k >> 31) ^ k & 1) - (k >> 31))));
+              ++idx;
+              *(_QWORD *)((char *)lpBuffer + 401) += 2i64;
+              break;
+            case 0xC0000094:
+              errorcode_cpy[idx] = 0xC0000094;
+              for ( m = 0; m < 10; ++m )
+                *(_BYTE *)(flag_base64 + idx) = (m ^ cur_chr)
+                                              + 93
+                                              * ((m + cur_chr) ^ (3 * cur_chr + m + *(_BYTE *)(flag_base64 + idx) + 4 * m));
+              ++idx;
+              *(_QWORD *)((char *)lpBuffer + 401) += 3i64;
+              break;
+            case 0xC0000096:
+              errorcode_cpy[idx] = 0xC0000096;
+              for ( n = 0; n < 10; ++n )
+                *(_BYTE *)(flag_base64 + idx) = (77
+                                               * ((7 * n) ^ (*(char *)(flag_base64 + idx) + (cur_chr << (n % 3)) + 0x2D))
+                                               + n
+                                               + cur_chr)
+                                              % 0xFF;
+              ++idx;
+              *(_QWORD *)((char *)lpBuffer + 401) += 3i64;
+              break;
+          }
+          WriteFile(hNamedPipe, lpBuffer, 0x600u, &NumberOfBytesWritten, 0i64);
+          break;
+```
+
+Case này nhận kí tự cần mã hoá và mã lỗi, đầu tiên case này sẽ check mã lỗi với giá trị tại vị trí thứ ``idx`` trong mảng mã lỗi ``errorcode``, nếu sai thì biến check bị gán thành 0, sau khi kiểm tra mã lỗi thì chương trình dựa vào mã lỗi để nhảy đến case mã hoá tương ứng, mã hoá xong thì tăng idx lên, data được gửi đi cho chương trình khác là kí tự tiếp theo của chuỗi Base64 bị mã hoá.
+
+Quay lại file ``KMACTF.exe``, có thể thấy với mỗi kí tự thì hàm gây lỗi được gọi vào sẽ khác nhau, từ đây ta có thể suy ra được với những kí tự nào sẽ nhảy đến hàm gây mã lỗi nào -> nhảy đến case mã hoá nào
+
+![image](https://github.com/user-attachments/assets/90184957-4188-4b2d-ad43-8427b5129670)
+
+
+#### Case 0x8:
+
+```C
+if ( idx >= len_base64 )
+          {
+            v1 = 1;
+            for ( ii = 0; ; ++ii )
+            {
+              if ( ii >= 64 )
+                goto LABEL_52;
+              if ( *(char *)(flag_base64 + ii) != checker[ii] )
+                break;
+            }
+            v1 = 0;
+LABEL_52:
+            *(_BYTE *)lpBuffer = -52;
+            WriteFile(hNamedPipe, lpBuffer, 1u, &NumberOfBytesWritten, 0i64);
+            check = 1;
+            idx = 0;
+            if ( v1 )
+            {
+              MessageBoxW(0i64, L"Correct", L"Correct", 0x40000u);
+            }
+            else
+            {
+              MessageBoxW(0i64, L"Wrong", L"Wrong", 0x40000u);
+              anhTaiTrollerdotExe();
+            }
+          }
+          else
+          {
+            *(_BYTE *)lpBuffer = *(_BYTE *)(flag_base64 + idx);
+            if ( !check )
+            {
+              *(_BYTE *)lpBuffer = -52;
+              WriteFile(hNamedPipe, lpBuffer, 1u, &NumberOfBytesWritten, 0i64);
+              idx = 0;
+              check = 1;
+              CloseHandle(hNamedPipe);
+              MessageBoxW(0i64, L"Wrong", L"Wrong", 0x40000u);
+              anhTaiTrollerdotExe();
+            }
+            WriteFile(hNamedPipe, lpBuffer, 1u, &NumberOfBytesWritten, 0i64);
+          }
+          break;
+```
+
+Case này sẽ check nếu ``idx >= len_base64``, tức là nếu đã mã hoá hết toàn bộ base64 thì sẽ vào vòng lặp để kiểm tra với mảng ``checker`` nếu đung hết thì nhảy ra MessageBox ``correct``, sai thì nhảy ra MessageBox ``wrong``; còn nếu chưa mã hoá hết thì kiểm tra lại biến ``check`` để xem ``errorcode`` được gọi đúng thứ tự không, nếu không thì cũng nhảy ra MessageBox ``wrong`` 
+
+Tổng kết lại, chương trình thực hiện việc mã hoá Flag dựa vào việc truyền data giữa hai tiến trình bằng pipe, flag được nhập vào phải dài ``0x2E``, sau đó flag được mã hoá base64, sau đó chương trình sẽ check từng kí tự một trong chuỗi base64 thu được, dựa vào cơ chế hàm gây lỗi như trên để xác định hàm mã hoá cụ thể cho từng kí tự khác nhau. Mã hoá xong thì gọi đến Case 8 để kiểm tra
+
+### Reverse
+
+Dựa vào những thông tin trên, mình sẽ viết một script để tìm được chuỗi base64 sau đó decode chuỗi base64 đó để lấy flag
+
+```C
+#include <stdio.h>
+#include <string.h>
+#include <windows.h>
+
+BYTE checker[65] = {
+    0x72, 0xBB, 0xB2, 0xCD, 0x58, 0xB2, 0x81, 0x0E, 0xA4, 0xB1,
+    0xED, 0xDB, 0x84, 0xB2, 0xC0, 0xAA, 0x60, 0xD0, 0xE8, 0xE8,
+    0xB0, 0x12, 0x81, 0x1E, 0xED, 0xD0, 0xF3, 0x05, 0xB0, 0xB1,
+    0x04, 0x04, 0x7D, 0xF3, 0xC0, 0xE8, 0xED, 0x12, 0xF3, 0xC2,
+    0x7D, 0x0E, 0x0E, 0x0E, 0x7D, 0x04, 0xC0, 0xBB, 0xED, 0xB1,
+    0x81, 0xED, 0xA4, 0xCF, 0xC0, 0x68, 0x84, 0xD0, 0xE2, 0x1B,
+    0xC2, 0x58, 0x30, 0x30, 0x00
+};
+
+int errorcode[] = {0xC0000094, 0x0C0000005, 0x0C0000096, 0x0C0000005, 0x0C0000094, 0x0C0000096, 0x0C000001D, 0x0C0000094, 0x0C0000094,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x0C0000096, 0x0C0000096, 0x0C0000094, 0x80000003, 0x0C0000094, 0x0C0000096, 0x0C0000096, 0x0C0000096,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x80000003, 0x0C0000005, 0x0C0000096, 0x0C0000094, 0x0C0000005, 0x0C000001D, 0x0C000001D,
+0x80000003, 0x0C0000005, 0x0C000001D, 0x0C0000094, 0x0C0000094, 0x0C0000096, 0x0C0000005, 0x0C0000094, 0x0C0000094, 0x0C0000096,
+0x0C000001D, 0x0C0000094, 0x0C000001D, 0x0C000001D, 0x0C000001D, 0x80000003, 0x0C0000094, 0x0C0000005, 0x0C0000005, 0x0C000001D, 0x0C000001D,
+0x0C0000094, 0x0C0000094, 0x0C0000005, 0x0C0000094, 0x0C000001D, 0x0C0000096, 0x0C0000096, 0x0C0000005, 0x80000003, 0x0C0000096,
+0x0C0000094, 0x0C0000096, 0x0C0000096};
+
+BYTE is0xC000001D[13] = {'+', '2', 'H', 'R', 'X', 'Z', 'a', 'l', 'm', 'o', 's', 'v', 'x'};
+BYTE is0x80000003[13] = {'/', 'C', 'D', 'F', 'N', 'P', 'c', 'j', 'k', 'p', 'q', 't', 'w'};
+BYTE is0xC0000005[13] = {'0', '6', '7', 'A', 'B', 'K', 'L', 'O', 'T', 'b', 'g', 'y', 'z'};
+BYTE is0xc0000096[13] = {'1', '4', '5', '8', '=', 'I', 'J', 'U', 'W', 'd', 'f', 'r', 'u'};
+BYTE is0xc0000094[13] = {'3', '9', 'E', 'G', 'M', 'Q', 'S', 'V', 'Y', 'e', 'h', 'i', 'n'};
+
+BYTE case0x80000003(BYTE chr){
+    BYTE v0 = chr;
+    for (int i = 0; i < 10; i++){
+        chr = 7 * (i ^ v0) + ((i + 51) ^ (chr + 69));
+    }
+    return chr;
+}
+
+BYTE case0xC0000005(BYTE chr){
+    BYTE v0 = chr;
+    for (int j = 0; j < 10; j++){
+        chr = (chr + j + 85) ^ 7;
+    }
+    return chr;
+}
+
+BYTE case0xC000001D(BYTE chr){
+    BYTE v0 = chr;
+    for (int k = 0; k < 10; k++){
+        chr = ((char)chr << (k % 3)) & 0x4F ^ (91 * ((k + v0) ^ chr) + k + (v0 >> (((k >> 31) ^ k & 1) - (k >> 31))));
+    }
+    return chr;
+}
+
+BYTE case0xC0000094(BYTE chr){
+    BYTE v0 = chr;
+    for (int m = 0; m < 10; m++){
+        chr = (m ^ v0) + 93 * ((m + v0) ^ (3 * v0 + m + chr + 4 * m));
+    }
+    return chr;
+}
+
+BYTE case0xC0000096(BYTE chr){
+    BYTE v0 = chr;
+    for (int n = 0; n < 10; n++){
+        chr = (77 * ((7 * n) ^ ((char)chr + (v0 << (n % 3)) + 45)) + n + v0) % 255;
+    }
+    return chr;
+}
+
+int main(){
+    for (int i = 0; i < 64; i++) {
+        switch(errorcode[i]){
+            case 0x80000003:
+                for (int j = 0; j < strlen(is0x80000003); j++) {
+                    if (case0x80000003(is0x80000003[j]) == checker[i]) {
+                        printf("%c", is0x80000003[j]);
+                        break;
+                    }
+                }
+                break;
+            case 0xC0000005:
+                for (int j = 0; j < strlen(is0xC0000005); j++) {
+                    if (case0xC0000005(is0xC0000005[j]) == checker[i]) {
+                        printf("%c", is0xC0000005[j]);
+                        break;
+                    }
+                }
+                break;
+            case 0xC000001D:
+                for (int j = 0; j < strlen(is0xC000001D); j++) {
+                    if (case0xC000001D(is0xC000001D[j]) == checker[i]) {
+                        printf("%c", is0xC000001D[j]);
+                        break;
+                    }
+                }
+                break;
+            case 0xC0000094:
+                for (int j = 0; j < strlen(is0xc0000094); j++) {
+                    if (case0xC0000094(is0xc0000094[j]) == checker[i]) {
+                        printf("%c", is0xc0000094[j]);
+                        break;
+                    }
+                }
+                break;
+            case 0xC0000096:
+                for (int j = 0; j < strlen(is0xc0000096); j++) {
+                    if (case0xC0000096(is0xc0000096[j]) == checker[i]) {
+                        printf("%c", is0xc0000096[j]);
+                        break;
+                    }
+                }
+                break;
+        }
+    }
+    printf("\n");
+    return 0;
+}
+```
+
+Kết quả script C trên là chuỗi ``S01BQ1RGe2hvd19tYW55X3RpbWVzX2FyZV95b3VfZGllZF90b2RheT9odWg/fQ==``, ném lên Cyberchef và lấy Flag của challenge
+
+![image](https://github.com/user-attachments/assets/8fbee736-78fd-4ddb-8d0b-8f804accd056)
+
+# Flag
+
+``KMACTF{how_many_times_are_you_died_today?huh?}``
+
